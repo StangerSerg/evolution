@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="refresh" content="60">
+    <title>Evolution v0.1</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #1a1a2e; color: #eee; font-family: monospace; padding: 20px; display: flex; gap: 20px; }
+        .left { flex: 1; }
+        .right { width: 320px; background: #16213e; border-radius: 8px; padding: 15px; position: sticky; top: 20px; height: fit-content; }
+        h1 { margin-bottom: 10px; color: #00ff88; font-size: 20px; }
+        h2 { color: #00ccff; font-size: 14px; margin-bottom: 10px; }
+        h3 { color: #ffaa00; font-size: 12px; margin-top: 10px; }
+        .stats { margin-bottom: 15px; font-size: 12px; }
+        .stats div { margin: 3px 0; }
+        .grid { display: inline-block; border: 1px solid #333; }
+        .row { display: flex; }
+        .cell {
+            width: 16px; height: 16px; border: 1px solid #222;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 8px; cursor: pointer;
+        }
+        .cell.water { background: #1a3a5c; }
+        .cell.land { background: #3d2b1f; }
+        .cell:hover { border-color: #00ff88; }
+        .cell.selected { border: 2px solid #ffaa00; }
+        .cell .count { color: #0f0; font-weight: bold; font-size: 7px; }
+        .legend { margin-top: 20px; font-size: 11px; }
+        .legend div { margin: 2px 0; }
+        .organism-card { background: #1a1a2e; border-radius: 4px; padding: 8px; margin: 5px 0; font-size: 11px; }
+        .organism-card .trait { color: #ffaa00; }
+        .organism-card .energy { color: #00ff88; }
+        .organism-card .age { color: #888; }
+        .selected-info { margin-top: 10px; }
+        .no-selection { color: #666; font-size: 11px; margin-top: 10px; }
+        .click-hint { color: #888; font-size: 10px; margin-top: 5px; }
+        .cell-stats { background: #1a1a2e; border-radius: 4px; padding: 8px; margin: 8px 0; font-size: 11px; }
+    </style>
+</head>
+<body>
+    <div class="left">
+        <h1>🌍 Evolution v0.1</h1>
+        <div class="grid">
+            {% for y in max_y %}
+            <div class="row">
+                {% for x in max_x %}
+                    <div class="cell
+                        {% for c in cells %}
+                            {% if c.x == x and c.y == y %}
+                                {% if c.terrain == 'water' %}water{% else %}land{% endif %}
+                            {% endif %}
+                        {% endfor %}
+                    "
+                    data-x="{{ x }}"
+                    data-y="{{ y }}"
+                    onclick="selectCell({{ x }}, {{ y }})"
+                    id="cell-{{ x }}-{{ y }}">
+                        {% for c in cells %}
+                            {% if c.x == x and c.y == y %}
+                                {% if c.organisms.exists %}
+                                    <span class="count">{{ c.organisms.count }}</span>
+                                {% endif %}
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                {% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+        <div class="legend">
+            <div>🟦 Вода &nbsp; 🟫 Суша &nbsp; 🟢 Цифра = организмы</div>
+            <div class="click-hint">🖱 Кликни на ячейку для подробностей</div>
+        </div>
+    </div>
+
+    <div class="right">
+        <h2>📊 Статистика</h2>
+        <div class="stats">
+            <div>🦠 Микробы: {{ stats.total_microbes }}</div>
+            <div>🌱 Растения: {{ stats.total_plants }}</div>
+            <div>🍄 Грибы: {{ stats.total_fungi }}</div>
+            <div>🪱 Черви: {{ stats.total_worms }}</div>
+            <div>🦎 Тетраподы: {{ stats.total_tetrapods }}</div>
+        </div>
+
+        <h2>🔍 Выбранная ячейка</h2>
+        <div id="selected-info" class="no-selection">
+            Кликни на ячейку карты
+        </div>
+    </div>
+
+    <script>
+        const cellData = {{ cell_data_json|safe }};
+        const cellInfo = {{ cell_info_json|safe }};
+
+        function selectCell(x, y) {
+            document.querySelectorAll('.cell').forEach(el => el.classList.remove('selected'));
+
+            const el = document.getElementById('cell-' + x + '-' + y);
+            if (el) el.classList.add('selected');
+
+            const info = document.getElementById('selected-info');
+            const key = x + ',' + y;
+            const organisms = cellData[key] || [];
+            const cinfo = cellInfo[key] || {};
+
+            const terrainName = cinfo.terrain === 'water' ? 'Вода' : 'Суша';
+            const terrainIcon = cinfo.terrain === 'water' ? '🟦' : '🟫';
+            const nutrients = cinfo.nutrients || 0;
+
+            let html = '<h3>' + terrainIcon + ' Ячейка (' + x + ', ' + y + ') — ' + terrainName + '</h3>';
+
+            html += '<div class="cell-stats">';
+            html += '<div>🌡️ Питательность: <strong style="color:#00ff88;">' + nutrients.toFixed(1) + '</strong></div>';
+            html += '<div style="color:#888;">Организмов: ' + organisms.length + '</div>';
+            html += '</div>';
+
+            if (organisms.length === 0) {
+                html += '<div style="color:#888;font-size:11px;">Пусто</div>';
+            } else {
+                organisms.forEach(function(org) {
+                    const traitNames = {1: 'Выносливость', 2: 'Быстрый рост', 3: 'Каннибал', 4: 'Синергия', 5: 'Аккумулятор'};
+                    const traitName = traitNames[org.trait] || 'Нет';
+                    const traitIcon = org.trait === 3 ? '🔴' : org.trait === 4 ? '🟡' : org.trait === 1 ? '🛡️' : org.trait === 2 ? '⚡' : org.trait === 5 ? '🔋' : '⚪';
+
+                    html += '<div class="organism-card">';
+                    html += '<div>' + traitIcon + ' <strong>Микроб #' + org.id + '</strong></div>';
+                    html += '<div class="trait">Свойство: ' + traitName + '</div>';
+                    html += '<div class="energy">⚡ Энергия: ' + org.energy.toFixed(1) + '</div>';
+                    if (org.behavior) {
+                        const behavNames = {predator: 'Хищник', scavenger: 'Падальщик', generalist: 'Универсал'};
+                        html += '<div style="color:#ff8888;">🍖 ' + (behavNames[org.behavior] || org.behavior) + '</div>';
+                    }
+                    html += '<div class="age">🎂 Возраст: ' + org.age + 'ч / ' + org.max_age + 'ч</div>';
+                    html += '<div style="font-size:9px;color:#666;">Создан: час ' + org.birth_hour + '</div>';
+                    html += '</div>';
+                });
+            }
+
+            info.innerHTML = html;
+            info.classList.remove('no-selection');
+        }
+    </script>
+</body>
+</html>
